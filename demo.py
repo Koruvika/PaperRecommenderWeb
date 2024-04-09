@@ -1,19 +1,46 @@
-import streamlit as st
+import sqlalchemy
+from google.cloud.sql.connector import Connector
+import os
 
-def update_text(value):                     # <--- define callback function
-    st.session_state.text = value
+service_account_key_path = "/home/duong/angular-land-419708-ae255fcab897.json"
+INSTANCE_CONNECTION_NAME = "angular-land-419708:asia-southeast1:paper-recommender-system"
+DB_USER = "duongdhk"
+DB_PASS = "12345678"
+DB_NAME = "paper_recommender_db"
 
-# Initialize session state
-if 'text' not in st.session_state:
-    st.session_state.text = 'original'
+# Replace with the path to your service account key file
+os.environ["GOOGLE_APPLICATION_ CREDENTIALS"] = service_account_key_path
 
-if st.button("show"):
-    # Allow the user to modify the text
-    st.text_input("Edit Text", key='text')
+# initialize Connector object
+connector = Connector()
 
-# Display the modified text
-st.markdown(st.session_state.text)
 
-if st.button("show again", on_click=update_text, args=[st.session_state.text]):      # <--- invoke the callback
-    # Display the modified text
-    st.markdown(st.session_state.text)
+# function to return the database connection object
+def getconn():
+    conn = connector.connect(
+        INSTANCE_CONNECTION_NAME,
+        "pymysql",
+        user=DB_USER,
+        password=DB_PASS,
+        db=DB_NAME
+    )
+    return conn
+
+
+# create connection pool with 'creator' argument to our connection object function
+pool = sqlalchemy.create_engine(
+    "mysql+pymysql://",
+    creator=getconn,
+)
+
+# connect to connection pool
+with pool.connect() as db_conn:
+    # commit transactions
+    db_conn.commit()
+
+    # query and fetch ratings table
+    results = db_conn.execute(sqlalchemy.text("SELECT * FROM users")).fetchall()
+
+    # show results
+    for row in results:
+        print(row)
