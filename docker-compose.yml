@@ -1,0 +1,8 @@
+version: "3.7"
+
+services:
+  app:
+    image: paper_recommender_web:v1
+    ports:
+      - "8080:8080"
+    restart: unless-stopped

@@ -13,10 +13,17 @@ from utils.controller import config_file
 from utils.models import recommend_by_similarity
 from google.cloud import firestore
 
-# Add a new user to the database
-with open("/home/duong/paper-recommender-system-firebase-adminsdk-h3zcq-4add4f9c7b.json") as f:
-    secret_key = yaml.load(f, Loader=SafeLoader)
 
+# configs
+with open(config_file) as file:
+    configs = yaml.load(file, Loader=SafeLoader)
+
+# login configs
+login_config_path = configs['login_config']
+# firebase secret key
+fb_key_path = configs['firebase_configs']['secret_key_path']
+with open(fb_key_path) as f:
+    secret_key = yaml.load(f, Loader=SafeLoader)
 firebase_db = firestore.Client.from_service_account_info(secret_key)
 
 
@@ -27,8 +34,8 @@ def register(authenticator, config):
             = authenticator.register_user("sidebar", pre_authorization=False)
         if email_of_registered_user:
             # write to config
-            with open(config_file, 'w') as file:
-                yaml.dump(config, file, default_flow_style=False)
+            with open(login_config_path, 'w') as fl:
+                yaml.dump(config, fl, default_flow_style=False)
 
             # syn config to db
             password = config["credentials"]['usernames'][username_of_registered_user].get("password")
@@ -182,8 +189,8 @@ def main():
         page_title="Hello",
         page_icon="👋",
     )
-    with open(config_file) as file:
-        config = yaml.load(file, Loader=SafeLoader)
+    with open(login_config_path) as fl:
+        config = yaml.load(fl, Loader=SafeLoader)
 
     authenticator = Authenticate(
         config['credentials'],

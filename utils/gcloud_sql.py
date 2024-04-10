@@ -2,16 +2,22 @@ from typing import List
 import sqlalchemy
 from google.cloud.sql.connector import Connector
 import os
+import yaml
+from yaml import SafeLoader
 
-config_file = "configs/login_config.yaml"
-service_account_key_path = "/home/duong/angular-land-419708-ae255fcab897.json"
-INSTANCE_CONNECTION_NAME = "angular-land-419708:asia-southeast1:paper-recommender-system"
-DB_USER = "duongdhk"
-DB_PASS = "12345678"
-DB_NAME = "paper_recommender_db"
+config_file = "configs/configs.yaml"
+
+with open(config_file) as file:
+    configs = yaml.load(file, Loader=SafeLoader)
+
+service_account_key_path = configs["service_account_key_path"]
+INSTANCE_CONNECTION_NAME = str(configs["database_configs"]["INSTANCE_CONNECTION_NAME"])
+DB_USER = str(configs["database_configs"]["DB_USER"])
+DB_PASS = str(configs["database_configs"]["DB_PASS"])
+DB_NAME = str(configs["database_configs"]["DB_NAME"])
 
 # Replace with the path to your service account key file
-os.environ["GOOGLE_APPLICATION_ CREDENTIALS"] = service_account_key_path
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = service_account_key_path
 
 # initialize Connector object
 connector = Connector()
@@ -129,7 +135,7 @@ def insert_user_into_users(user_id, name, email, username, user_password):
         creator=get_connection,
     )
     with pool.connect() as conn:
-        query = f"INSERT INTO users (`User ID`, `Username`, `Password`, `Name`, `Email`) VALUES (:user_id, :name, :email, :username, :user_password)"
+        query = f"INSERT INTO users (`User ID`, `Name`, `Email`, `Username`, `Password`) VALUES (:user_id, :name, :email, :username, :user_password)"
         params = {
             "user_id": user_id,
             "name": name,

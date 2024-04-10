@@ -1,2 +1,9 @@
 cloud-sql-python-connector[pymysql]
 SQLAlchemy==2.0.7
+PyYAML
+pandas
+numpy
+streamlit
+streamlit-authenticator
+scikit-learn
+google-cloud-firestore
