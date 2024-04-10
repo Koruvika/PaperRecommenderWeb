@@ -3,10 +3,11 @@ from typing import List
 
 import pandas as pd
 import uuid
-from .database import (get_items_by_column_value, insert_session_into_sessions, get_items_from_table,
+from .gcloud_sql import (get_items_by_column_value, insert_session_into_sessions, get_items_from_table,
                        delete_session_by_session_id, delete_session_item_by_session_id, get_sessions_by_name_user_id,
                        update_session_item_by_changes, insert_user_into_users, insert_paper_into_session,
                        get_items_by_column_values, get_items_by_column_contain_text)
+from .gcloud_sql import config_file
 import streamlit as st
 
 
@@ -79,7 +80,7 @@ def get_papers_by_list_paper_ids(list_paper_ids: List[str]) -> pd.DataFrame:
     return results
 
 
-@st.cache_data
+@st.cache_data(show_spinner=False)
 def get_paper_by_paper_id(paper_id: str) -> dict:
     paper = get_items_by_column_value("papers", "Paper ID", paper_id)
     if len(paper) == 0:

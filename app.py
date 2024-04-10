@@ -9,7 +9,7 @@ from yaml.loader import SafeLoader
 from utils.controller import (get_user_by_username, get_sessions_by_user_id, insert_new_session, delete_session,
                               update_session_item, get_papers, get_papers_by_session_id, insert_new_user, get_embeddings,
                               insert_new_paper_into_session, get_papers_by_list_paper_ids, get_paper_by_paper_id, get_papers_by_text)
-from utils.database import config_file
+from utils.controller import config_file
 from utils.models import recommend_by_similarity
 from google.cloud import firestore
 
@@ -261,7 +261,7 @@ def main():
                     st.toggle(
                         ' ',
                         key=f"{session_id} {paper_id}",
-                        value=int(current_papers.loc[current_papers["Paper ID"] == paper_id, "Appropriate"].iloc[0]),
+                        value=bool(current_papers.loc[current_papers["Paper ID"] == paper_id, "Appropriate"].iloc[0]),
                     )
                     st.write(f"*{delta_time}*")
                 with col2:

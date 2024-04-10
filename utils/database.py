@@ -1,27 +1,12 @@
-import uuid
 from typing import List
-
-import pandas as pd
-import yaml
-from tqdm import tqdm
-from yaml.loader import SafeLoader
 import mysql.connector
+import yaml
+from yaml.loader import SafeLoader
 
-
-config_file = "configs/config.yaml"
-# user_db_file = "/mnt/data1/paper_recommend_system/data/users.csv"
-# session_db_file = "/mnt/data1/paper_recommend_system/data/session.csv"
-# session_paper_db_file = "/mnt/data1/paper_recommend_system/data/session_item.csv"
-# paper_db_file = "/mnt/data1/paper_recommend_system/data/papers.csv"
-
-# user_df = pd.read_csv(user_db_file)
-# session_df = pd.read_csv(session_db_file)
-# paper_df = pd.read_csv(paper_db_file)
-# session_item_df = pd.read_csv(session_paper_db_file)
+config_file = "configs/login_config.yaml"
 
 with open(config_file) as file:
     config = yaml.load(file, Loader=SafeLoader)
-
 
 host = "localhost"
 user = "duong"
@@ -45,7 +30,6 @@ def get_items_by_column_contain_text(table, column, text):
     return results
 
 
-
 def get_items_by_column_value(table, column, value):
     mydb = mysql.connector.connect(
         host=host,
@@ -55,13 +39,12 @@ def get_items_by_column_value(table, column, value):
     )
     my_cursor = mydb.cursor()
     query = f"SELECT * FROM {table} WHERE `{column}` = %s"
-    #print(query, value)
-    my_cursor.execute(query, (value, ))
+    # print(query, value)
+    my_cursor.execute(query, (value,))
     results = my_cursor.fetchall()
     my_cursor.close()
     mydb.close()
     return results
-
 
 
 def get_items_by_column_values(table: str, column: str, values: List[str]):
@@ -79,7 +62,6 @@ def get_items_by_column_values(table: str, column: str, values: List[str]):
     my_cursor.close()
     mydb.close()
     return results
-
 
 
 def get_sessions_by_name_user_id(name, user_id):
@@ -219,7 +201,7 @@ def delete_session_item_by_session_id(session_id):
     delete_query = f"DELETE FROM session_item WHERE `Session ID` = %s"
 
     # Execute the query with the values to delete as a tuple
-    my_cursor.execute(delete_query, (session_id, ))
+    my_cursor.execute(delete_query, (session_id,))
 
     # Commit the changes
     mydb.commit()
@@ -244,4 +226,3 @@ def update_session_item_by_changes(changes):
 
     my_cursor.close()
     mydb.close()
-
