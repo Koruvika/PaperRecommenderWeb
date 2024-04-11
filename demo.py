@@ -1,46 +1,13 @@
-import sqlalchemy
-from google.cloud.sql.connector import Connector
-import os
+import pandas as pd
 
-service_account_key_path = "/home/duong/angular-land-419708-ae255fcab897.json"
-INSTANCE_CONNECTION_NAME = "angular-land-419708:asia-southeast1:paper-recommender-system"
-DB_USER = "duongdhk"
-DB_PASS = "12345678"
-DB_NAME = "paper_recommender_db"
+# Create a sample DataFrame
+data = {'Name': ['Alice', 'Bob', 'Charlie'], 'Age': [25, 30, 28]}
+df = pd.DataFrame(data)
 
-# Replace with the path to your service account key file
-os.environ["GOOGLE_APPLICATION_ CREDENTIALS"] = service_account_key_path
+# Create a dictionary for the new row
+new_row = {'Name': 'David', 'Age': 35}
 
-# initialize Connector object
-connector = Connector()
+# Append the new row to the DataFrame
+df = df.append(new_row, ignore_index=True)
 
-
-# function to return the database connection object
-def getconn():
-    conn = connector.connect(
-        INSTANCE_CONNECTION_NAME,
-        "pymysql",
-        user=DB_USER,
-        password=DB_PASS,
-        db=DB_NAME
-    )
-    return conn
-
-
-# create connection pool with 'creator' argument to our connection object function
-pool = sqlalchemy.create_engine(
-    "mysql+pymysql://",
-    creator=getconn,
-)
-
-# connect to connection pool
-with pool.connect() as db_conn:
-    # commit transactions
-    db_conn.commit()
-
-    # query and fetch ratings table
-    results = db_conn.execute(sqlalchemy.text("SELECT * FROM users")).fetchall()
-
-    # show results
-    for row in results:
-        print(row)
+print(df)

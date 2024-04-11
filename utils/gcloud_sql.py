@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Dict
 import sqlalchemy
 from google.cloud.sql.connector import Connector
 import os
@@ -15,6 +15,8 @@ INSTANCE_CONNECTION_NAME = str(configs["database_configs"]["INSTANCE_CONNECTION_
 DB_USER = str(configs["database_configs"]["DB_USER"])
 DB_PASS = str(configs["database_configs"]["DB_PASS"])
 DB_NAME = str(configs["database_configs"]["DB_NAME"])
+embeddings_path = str(configs["database_configs"]["embeddings_path"])
+papers_path = str(configs["database_configs"]["papers_path"])
 
 # Replace with the path to your service account key file
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = service_account_key_path
@@ -98,6 +100,23 @@ def get_sessions_by_name_user_id(name, user_id):
         results = conn.execute(sqlalchemy.text(query), params).fetchall()
 
     return results
+
+
+def get_session_item_by_session_id_paper_id(session_id, paper_id):
+    pool = sqlalchemy.create_engine(
+        "mysql+pymysql://",
+        creator=get_connection,
+    )
+    with pool.connect() as conn:
+        query = f"SELECT * FROM session_item WHERE `Session ID` = :session_id and `Paper ID` = :paper_id"
+        params = {
+            "session_id": session_id,
+            "paper_id": paper_id
+        }
+        results = conn.execute(sqlalchemy.text(query), params).fetchall()
+
+    return results
+
 
 
 def get_items_from_table(table):
@@ -211,6 +230,47 @@ def update_session_item_by_changes(changes):
             }
             conn.execute(sqlalchemy.text(query), params)
             conn.commit()
+
+
+def update_session_item_by_change(change: Dict):
+    pool = sqlalchemy.create_engine(
+        "mysql+pymysql://",
+        creator=get_connection,
+    )
+    with pool.connect() as conn:
+        query = f"UPDATE session_item SET `Appropriate` = :appropriate WHERE `Session Id` = :session_id AND `Paper ID` = :paper_id"
+        params = {
+            "session_id": change["Session ID"],
+            "paper_id": change["Paper ID"],
+            # "date": change["Date"],
+            "appropriate": change["Appropriate"],
+        }
+        conn.execute(sqlalchemy.text(query), params)
+        conn.commit()
+
+
+def update_session_item_by_changes_v2(changes: List[Dict]):
+    pool = sqlalchemy.create_engine(
+        "mysql+pymysql://",
+        creator=get_connection,
+    )
+    with pool.connect() as conn:
+        session_id = changes[0]["Session ID"]
+        delete_query = f"DELETE FROM session_item WHERE `Session ID` = :session_id"
+        params = {"session_id": session_id}
+        conn.execute(sqlalchemy.text(delete_query), params)
+        # conn.commit()
+        for change in changes:
+            query = f"INSERT INTO session_item (`Session ID`, `Paper ID`, `Date`, `Appropriate`) VALUES (:session_id, :paper_id, :dt, :appropriate)"
+            params = {
+                "session_id": change["Session ID"],
+                "paper_id": change["Paper ID"],
+                "dt": change["Date"],
+                "appropriate": change["Appropriate"],
+            }
+            conn.execute(sqlalchemy.text(query), params)
+            # conn.commit()
+        conn.commit()
 
 
 if __name__ == "__main__":
