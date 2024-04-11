@@ -7,3 +7,4 @@ streamlit
 streamlit-authenticator
 scikit-learn
 google-cloud-firestore
+polars
