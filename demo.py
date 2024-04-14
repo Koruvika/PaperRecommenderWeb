@@ -1,13 +1,34 @@
-import pandas as pd
+DB_NAME = "pseudo_database"
+user_sql_path = "/home/duong/dumps/users.sql"
+papers_sql_path = "/home/duong/dumps/papers.sql"
+session_sql_path = "/home/duong/dumps/sessions.sql"
+session_item_sql_path = "/home/duong/dumps/session_item.sql"
+lines = []
 
-# Create a sample DataFrame
-data = {'Name': ['Alice', 'Bob', 'Charlie'], 'Age': [25, 30, 28]}
-df = pd.DataFrame(data)
+with open(user_sql_path, "r") as f:
+    lines += f.readlines()
 
-# Create a dictionary for the new row
-new_row = {'Name': 'David', 'Age': 35}
+with open(papers_sql_path, "r") as f:
+    lines += f.readlines()
 
-# Append the new row to the DataFrame
-df = df.append(new_row, ignore_index=True)
+with open(session_sql_path, "r") as f:
+    lines += f.readlines()
 
-print(df)
+with open(session_item_sql_path, "r") as f:
+    lines += f.readlines()
+
+
+
+
+with open("./init_db.sql", "w") as f:
+    f.close()
+
+with open("./init_db.sql", "a") as f:
+    f.write(f"use {DB_NAME};\n")
+    for line in lines:
+        f.write(line)
+        f.write("\n")
+
+
+
+print("debug")

@@ -1,5 +1,7 @@
 import datetime
 from typing import List, Dict
+
+import numpy as np
 import polars as pl
 import pandas as pd
 import uuid
@@ -85,7 +87,9 @@ def get_users() -> pd.DataFrame:
 def get_papers_by_session_id(session_id: str) -> pd.DataFrame:
     results = get_items_by_column_value("session_item", "Session ID", session_id)
     results = pd.DataFrame(results, columns=session_paper_columns)
-    results["Appropriate"] = results["Appropriate"].apply(ord)
+    # TODO: Update condition later
+    if results["Appropriate"].dtype not in [np.int32, np.int64]:
+        results["Appropriate"] = results["Appropriate"].apply(ord)
     return results
 
 

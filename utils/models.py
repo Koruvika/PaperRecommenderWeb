@@ -5,6 +5,8 @@ from sklearn.metrics.pairwise import cosine_similarity
 import streamlit as st
 import polars as pl
 
+from .controller import get_embedding_polar
+
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def recommend_by_similarity(user_papers, embeddings, embedding_columns, n=10):
@@ -31,8 +33,8 @@ def recommend_by_similarity(user_papers, embeddings, embedding_columns, n=10):
     return embeddings.iloc[top_10_indices, 0], top_similarities
 
 
-# @st.cache_data(ttl=3600, show_spinner=False)
-def recommend_by_similarity_v2(user_papers: List[str], embeddings: pl.DataFrame, embedding_columns: List[str], n: int = 10):
+@st.cache_data(ttl=3600, show_spinner=False)
+def recommend_by_similarity_v2(user_papers: List[str], embedding_columns: List[str], n: int = 10):
     """
 
     Args:
@@ -44,6 +46,7 @@ def recommend_by_similarity_v2(user_papers: List[str], embeddings: pl.DataFrame,
     Returns: list of recommended papers id
 
     """
+    embeddings = get_embedding_polar()
     user_embeddings = embeddings.filter(pl.col("Paper ID").is_in(user_papers)).select(embedding_columns[1:])
     similarity = cosine_similarity(embeddings.select(embedding_columns[1:]), user_embeddings)
     s_similarity = np.mean(similarity, axis=1)

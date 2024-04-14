@@ -1,17 +1,26 @@
-from typing import List
+from typing import List, Dict
 import mysql.connector
 import yaml
 from yaml.loader import SafeLoader
 
-config_file = "configs/login_config.yaml"
+# TODO: path is changed between develop and deploy with docker
+config_file = "configs/configs_docker.yaml"
 
 with open(config_file) as file:
-    config = yaml.load(file, Loader=SafeLoader)
+    configs = yaml.load(file, Loader=SafeLoader)
 
-host = "localhost"
-user = "duong"
-password = "12345678"
-database = "pseudo_database"
+service_account_key_path = configs["service_account_key_path"]
+INSTANCE_CONNECTION_NAME = str(configs["database_configs"]["INSTANCE_CONNECTION_NAME"])
+DB_USER = str(configs["database_configs"]["DB_USER"])
+DB_PASS = str(configs["database_configs"]["DB_PASS"])
+DB_NAME = str(configs["database_configs"]["DB_NAME"])
+embeddings_path = str(configs["database_configs"]["embeddings_path"])
+papers_path = str(configs["database_configs"]["papers_path"])
+
+host = INSTANCE_CONNECTION_NAME
+user = DB_USER
+password = DB_PASS
+database = DB_NAME
 
 
 def get_items_by_column_contain_text(table, column, text):
@@ -74,6 +83,22 @@ def get_sessions_by_name_user_id(name, user_id):
     my_cursor = mydb.cursor()
     query = f"SELECT * FROM sessions WHERE `Name` = %s and `User ID` = %s"
     my_cursor.execute(query, (name, user_id))
+    results = my_cursor.fetchall()
+    my_cursor.close()
+    mydb.close()
+    return results
+
+
+def get_session_item_by_session_id_paper_id(session_id, paper_id):
+    mydb = mysql.connector.connect(
+        host=host,
+        user=user,
+        password=password,
+        database=database
+    )
+    my_cursor = mydb.cursor()
+    query = f"SELECT * FROM session_item WHERE `Session ID` = %s and `Paper ID` = %s"
+    my_cursor.execute(query, (session_id, paper_id))
     results = my_cursor.fetchall()
     my_cursor.close()
     mydb.close()
@@ -224,5 +249,40 @@ def update_session_item_by_changes(changes):
         my_cursor.execute(update_query, (bool(change[2]), change[0], change[1]))
         mydb.commit()
 
+    my_cursor.close()
+    mydb.close()
+
+
+def update_session_item_by_change(change: Dict):
+    mydb = mysql.connector.connect(
+        host=host,
+        user=user,
+        password=password,
+        database=database
+    )
+    my_cursor = mydb.cursor()
+    update_query = f"UPDATE session_item SET `Appropriate` = %s WHERE `Session ID` = %s and `Paper ID` = %s"
+    my_cursor.execute(update_query, (change["Appropriate"], change["Session ID"], change["Paper ID"]))
+    mydb.commit()
+    my_cursor.close()
+    mydb.close()
+
+
+def update_session_item_by_changes_v2(changes: List[Dict]):
+    mydb = mysql.connector.connect(
+        host=host,
+        user=user,
+        password=password,
+        database=database
+    )
+    my_cursor = mydb.cursor()
+    session_id = changes[0]["Session ID"]
+    delete_query = f"DELETE FROM session_item WHERE `Session ID` = %s"
+    my_cursor.execute(delete_query, (session_id,))
+    for change in changes:
+        query = f"INSERT INTO session_item (`Session ID`, `Paper ID`, `Date`, `Appropriate`) VALUES (%s, %s, %s, %s)"
+        my_cursor.execute(query, (change["Session ID"], change["Paper ID"], change["Date"], change["Appropriate"]))
+
+    mydb.commit()
     my_cursor.close()
     mydb.close()

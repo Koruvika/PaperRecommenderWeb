@@ -56,13 +56,12 @@ def register(authenticator, config):
         st.error(e)
 
 
-def recommendation(appropriate_papers, embeddings):
+def recommendation(appropriate_papers):
     if "run_recommender" not in st.session_state:
         st.session_state["run_recommender"] = False
 
     if st.session_state["run_recommender"]:
         recommended_paper_ids, recommended_paper_similarities = recommend_by_similarity_v2(appropriate_papers,
-                                                                                           embeddings,
                                                                                            embedding_columns, 30)
         recommended_papers = get_papers_by_list_paper_ids_polar(recommended_paper_ids)
         recommended_papers = recommended_papers.with_columns(
@@ -234,7 +233,8 @@ def reset_del():
 def change_toggle(paper_id):
     st.session_state["run_recommender"] = False
     st.session_state["run_sidebar"] = False
-    st.session_state["current_papers"].loc[st.session_state["current_papers"]["Paper ID"] == paper_id, "Appropriate"] = 1 - st.session_state["current_papers"].loc[st.session_state["current_papers"]["Paper ID"] == paper_id, "Appropriate"]
+    if "current_papers" in st.session_state:
+        st.session_state["current_papers"].loc[st.session_state["current_papers"]["Paper ID"] == paper_id, "Appropriate"] = 1 - st.session_state["current_papers"].loc[st.session_state["current_papers"]["Paper ID"] == paper_id, "Appropriate"]
 
 
 def save_button_click():
@@ -291,12 +291,14 @@ def main():
     if authentication_status:
 
         st.write(f'Welcome *{name}*')
-        st.write(f"If you have any feedback, please contact me at duongdanghuynhkhanh@gmail.com")
+        st.write("Switch to the tab 'Search' to search for the papers you need and add them to the paper group")
+        st.write("Switch to the tab 'Recommendation' and click the button 'Save & Recommend' to make a recommendation")
+        st.write(f"If you have any feedback, please contact me at 102200251@sv.dut.udn.vn")
 
         user = get_user_by_username(username)
         sessions = get_sessions_by_user_id(user["User ID"])
-        print(sessions["Name"])
-        embeddings = load_database()
+        # print(sessions["Name"])
+        # embeddings = load_database()
 
         # Paper list
         option = st.sidebar.selectbox(
@@ -397,7 +399,7 @@ def main():
                 st.toast("No appropriate papers were found in the group")
             else:
                 # run recommender
-                recommendation(appropriate_papers, embeddings)
+                recommendation(appropriate_papers)
 
         # search tab
         with tab2:
@@ -408,11 +410,12 @@ def main():
                 search(text_search)
 
         # session utils
-        col1, col2, col3 = st.sidebar.columns(3)
+        st.sidebar.write("*Remember to click 'Save & Recommend' before switch to another group or refresh page*")
+        col1, col2, col3 = st.sidebar.columns([3, 3, 4])
 
         add_session_button = col1.button('Create Group')
         delete_session_button = col2.button('Delete Group')
-        save_session_button = col3.button('Recommend', on_click=save_button_click)
+        save_session_button = col3.button('Save & Recommend', on_click=save_button_click)
 
         if add_session_button:
             add_expander = st.sidebar.expander('Add new group')
@@ -438,7 +441,7 @@ def main():
                 st.toast(delete_message)
                 reset_del()
 
-        authenticator.logout('logout', 'sidebar')
+        authenticator.logout('Logout', 'sidebar')
 
     elif not authentication_status:
         register(authenticator, config)

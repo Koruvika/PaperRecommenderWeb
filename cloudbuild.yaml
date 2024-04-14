@@ -1,0 +1,6 @@
+steps:
+- name: 'gcr.io/$PROJECT_ID/docker-compose'
+  args: ['up']
+
+images:
+  - 'asia-southeast1-docker.pkg.dev/$PROJECT_ID/paper-recommender-web-registry/paper_recommender_web:v3'
