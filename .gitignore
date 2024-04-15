@@ -2,3 +2,4 @@
 **/__pycache__
 /db
 /.docker
+./init_db.sql

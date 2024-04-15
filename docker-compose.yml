@@ -1,21 +1,6 @@
 version: "3.7"
 
 services:
-  ngrok:
-    image: ngrok/ngrok:latest
-    restart: unless-stopped
-    command:
-      - "start"
-      - "--all"
-      - "--config"
-      - "/etc/ngrok.yml"
-    volumes:
-      - ./configs/ngrok.yaml:/etc/ngrok.yml
-    ports:
-      - "4040:4040"
-    depends_on:
-      - app
-      - db
   app:
     image: paper_recommender_web:latest
     ports:
@@ -27,7 +12,7 @@ services:
     image: mysql:8
     restart: always
     volumes:
-      - ./.docker/data/db:/var/lib/mysql
+      - ./.docker/data/db1:/var/lib/mysql
       - ./init_db.sql:/docker-entrypoint-initdb.d/db.sql:ro
     environment:
       MYSQL_ROOT_PASSWORD: rootpass
