@@ -5,11 +5,11 @@ import numpy as np
 import polars as pl
 import pandas as pd
 import uuid
-from .gcloud_sql import (get_items_by_column_value, insert_session_into_sessions, get_items_from_table,
+from .database import (get_items_by_column_value, insert_session_into_sessions, get_items_from_table,
                        delete_session_by_session_id, delete_session_item_by_session_id, get_sessions_by_name_user_id,
                        update_session_item_by_changes, insert_user_into_users, insert_paper_into_session, update_session_item_by_changes_v2,
                        get_items_by_column_values, get_items_by_column_contain_text, get_session_item_by_session_id_paper_id, update_session_item_by_change)
-from .gcloud_sql import config_file, embeddings_path, papers_path
+from .database import config_file, embeddings_path, papers_path
 import streamlit as st
 
 
