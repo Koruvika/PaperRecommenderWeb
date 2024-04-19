@@ -1,3 +1,5 @@
+"""Application."""
+
 import datetime
 
 import pandas as pd
@@ -6,9 +8,21 @@ import yaml
 from streamlit_authenticator import Authenticate
 from yaml.loader import SafeLoader
 
-from utils.controller import (get_user_by_username, get_sessions_by_user_id, insert_new_session, delete_session,
-                              update_session_item, get_papers, get_papers_by_session_id, insert_new_user, get_embeddings,
-                              insert_new_paper_into_session, get_papers_by_list_paper_ids, get_paper_by_paper_id, get_papers_by_text)
+from db.models import SessionLocal
+from db.execute import (
+    user as user_execute,
+    paper as paper_execute,
+    paper_group as paper_group_execute,
+    paper_group_info as paper_group_info_execute,
+)
+from db.services import (
+    user_service,
+    paper_service,
+    paper_group_service,
+    paper_group_info_service,
+)
+
+from utils.controller import get_embeddings
 from utils.database import config_file
 from utils.models import recommend_by_similarity
 from google.cloud import firestore
@@ -18,6 +32,7 @@ with open("/home/duong/paper-recommender-system-firebase-adminsdk-h3zcq-4add4f9c
     secret_key = yaml.load(f, Loader=SafeLoader)
 
 firebase_db = firestore.Client.from_service_account_info(secret_key)
+db = SessionLocal()
 
 
 def register(authenticator, config):
@@ -32,11 +47,20 @@ def register(authenticator, config):
 
             # syn config to db
             password = config["credentials"]['usernames'][username_of_registered_user].get("password")
-            register_message, user_id = insert_new_user(name_of_registered_user, email_of_registered_user,
-                                                        username_of_registered_user, password)
+            user_created_data = {
+                "username": name_of_registered_user,
+                "email": email_of_registered_user,
+                "name": username_of_registered_user,
+                "password": password,
+            }
+            register_message, user_id = user_service.create_user(user_created_data)
 
-            # create default session
-            insert_message = insert_new_session("default", user_id)
+            # create default group
+            group_inserted_data = {
+                "group_name": "Default",
+                "user_id": user_id
+            }
+            insert_message = paper_group_service.create_paper_group(group_inserted_data)
 
             st.toast(register_message)
             st.toast(insert_message)
@@ -45,12 +69,12 @@ def register(authenticator, config):
         st.error(e)
 
 
-def recommendation(appropriate_papers, embeddings, embedding_columns, session_id):
+def recommendation(appropriate_papers, embeddings, embedding_columns, group_id):
     recommended_papers = []
     recommended_paper_ids, recommended_paper_similarities = recommend_by_similarity(appropriate_papers, embeddings,
                                                                                     embedding_columns, 30)
     for idx, similarity in zip(recommended_paper_ids, recommended_paper_similarities):
-        paper = get_paper_by_paper_id(idx)
+        paper = paper_service.get_paper_by_paper_id(idx)
         if len(paper.keys()) != 0:
             paper["Similarity"] = similarity
             recommended_papers.append(paper)
@@ -61,14 +85,14 @@ def recommendation(appropriate_papers, embeddings, embedding_columns, session_id
     for _, (index, row) in enumerate(recommended_papers.iterrows()):
         paper_id = row["Paper ID"]
 
-        if "session_papers" in st.session_state:
-            if paper_id in st.session_state["session_papers"]:
+        if "group_papers" in st.session_state:
+            if paper_id in st.session_state["group_papers"]:
                 continue
 
-        if "rec_session_papers" not in st.session_state:
-            st.session_state["rec_session_papers"] = []
+        if "rec_group_papers" not in st.session_state:
+            st.session_state["rec_group_papers"] = []
         else:
-            st.session_state["rec_session_papers"].append(paper_id)
+            st.session_state["rec_group_papers"].append(paper_id)
 
         link = "https://paperswithcode.com/paper/" + paper_id
 
@@ -82,26 +106,26 @@ def recommendation(appropriate_papers, embeddings, embedding_columns, session_id
             st.write(row["Abstract"])
 
         with col2:
-            add_button = st.button("Add to session", key=f"rec {session_id} {paper_id}", on_click=click_add_button,
-                                   args=(session_id, paper_id, 0))
+            add_button = st.button("Add to group", key=f"rec {group_id} {paper_id}", on_click=click_add_button,
+                                   args=(group_id, paper_id, 0))
         st.divider()
 
 
-def search(text_search, session_id):
-    searched_papers = get_papers_by_text(text_search).iloc[:50]
+def search(text_search, group_id):
+    searched_papers = paper_service.get_papers_by_text(text_search).iloc[:50]
 
     # show results
     for index, row in searched_papers.iterrows():
         paper_id = row["Paper ID"]
 
-        if "session_papers" in st.session_state:
-            if paper_id in st.session_state["session_papers"]:
+        if "group_papers" in st.session_state:
+            if paper_id in st.session_state["group_papers"]:
                 continue
 
-        if "search_session_papers" not in st.session_state:
-            st.session_state["search_session_papers"] = []
+        if "search_group_papers" not in st.session_state:
+            st.session_state["search_group_papers"] = []
         else:
-            st.session_state["search_session_papers"].append(paper_id)
+            st.session_state["search_group_papers"].append(paper_id)
 
         link = "https://paperswithcode.com/paper/" + paper_id
 
@@ -114,13 +138,18 @@ def search(text_search, session_id):
             st.write(row["Abstract"])
 
         with col2:
-            add_button = st.button("Add to session", key=f"search {session_id} {paper_id}", on_click=click_add_button,
-                                   args=(session_id, paper_id, 1))
+            add_button = st.button("Add to group", key=f"search {group_id} {paper_id}", on_click=click_add_button,
+                                   args=(group_id, paper_id, 1))
         st.divider()
 
 
-def click_add_button(session_id, paper_id, ros):
-    insert_message = insert_new_paper_into_session(session_id, paper_id)
+def click_add_button(group_id, paper_id, ros):
+    group_info_inserted_data = {
+        "group_id": group_id,
+        "paper_id": paper_id,
+        "appropriate": appropriate,
+    }
+    insert_message = paper_group_info_service.insert_paper_to_group(group_info_inserted_data)
 
     data = {
         "session_id": session_id,
@@ -130,10 +159,10 @@ def click_add_button(session_id, paper_id, ros):
         "recommend_or_search": ros
     }
 
-    if "session_papers" in st.session_state:
-        for idx in st.session_state["session_papers"]:
-            if f"{session_id} {idx}" in st.session_state:
-                if st.session_state[f"{session_id} {idx}"]:
+    if "group_papers" in st.session_state:
+        for idx in st.session_state["group_papers"]:
+            if f"{group_id} {idx}" in st.session_state:
+                if st.session_state[f"{group_id} {idx}"]:
                     data["appropriate_papers"].append(idx)
                 else:
                     data["not_appropriate_papers"].append(idx)
@@ -141,15 +170,15 @@ def click_add_button(session_id, paper_id, ros):
     doc_ref = firebase_db.collection("tracking_data").document()
     doc_ref.set(data)
 
-    if "session_papers" not in st.session_state:
-        st.session_state["session_papers"] = [paper_id]
+    if "group_papers" not in st.session_state:
+        st.session_state["group_papers"] = [paper_id]
     else:
-        st.session_state["session_papers"].append(paper_id)
+        st.session_state["group_papers"].append(paper_id)
 
 
-def change_session():
-    if "session_papers" in st.session_state:
-        del st.session_state["session_papers"]
+def change_group():
+    if "group_papers" in st.session_state:
+        del st.session_state["group_papers"]
 
 
 def submitted_add():
@@ -197,39 +226,39 @@ def main():
 
         st.write(f'Welcome *{name}*')
         st.write(f"If you have any feedback, please contact me at duongdanghuynhkhanh@gmail.com")
-        user = get_user_by_username(username)
-        sessions = get_sessions_by_user_id(user["User ID"])
+        user = paper_execute.check_user_exist(db, username)
+        groups = paper_group_service.get_groups_by_user_id(user["User ID"])
 
         embeddings, embedding_columns = load_database()
 
         # Paper list
         option = st.sidebar.selectbox(
-            'Choose the working session',
-            sessions["Name"],
-            on_change=change_session
+            'Choose the working group',
+            groups["Name"],
+            on_change=change_group
         )
 
         # show list paper
         paper_container = st.sidebar.container(height=600)
-        current_papers, filtered_df, session_id = None, None, None
-        if len(sessions) == 0:
-            print("No session for this user")
+        current_papers, filtered_df, group_id = None, None, None
+        if len(groups) == 0:
+            print("No group for this user")
         else:
-            session = sessions.loc[sessions["Name"] == option]
-            session_id = session.iloc[0]["Session ID"]
-            current_papers = get_papers_by_session_id(session_id)
+            group = groups.loc[groups["Name"] == option]
+            group_id = group.iloc[0]["Group ID"]
+            current_papers = paper_group_info_service.get_papers_by_group_id(group_id)
             if not current_papers.empty:
-                filtered_df = get_papers_by_list_paper_ids(current_papers["Paper ID"].values)
+                filtered_df = paper_service.get_papers_by_list_paper_ids(current_papers["Paper ID"].values)
 
             else:
                 filtered_df = pd.DataFrame([])
 
             for index, row in filtered_df.iterrows():
-                if "session_papers" not in st.session_state:
-                    st.session_state["session_papers"] = [row["Paper ID"]]
+                if "group_papers" not in st.session_state:
+                    st.session_state["group_papers"] = [row["Paper ID"]]
                 else:
-                    if row["Paper ID"] not in st.session_state["session_papers"]:
-                        st.session_state["session_papers"].append(row["Paper ID"])
+                    if row["Paper ID"] not in st.session_state["group_papers"]:
+                        st.session_state["group_papers"].append(row["Paper ID"])
 
                 # process the properties
                 paper_id = row["Paper ID"]
@@ -260,7 +289,7 @@ def main():
                 with col1:
                     st.toggle(
                         ' ',
-                        key=f"{session_id} {paper_id}",
+                        key=f"{group_id} {paper_id}",
                         value=int(current_papers.loc[current_papers["Paper ID"] == paper_id, "Appropriate"].iloc[0]),
                     )
                     st.write(f"*{delta_time}*")
@@ -274,18 +303,18 @@ def main():
         with tab1:
             st.title('Scientific Paper Recommendation')
 
-            # filter appropriate session papers
+            # filter appropriate group papers
             appropriate_papers = []
-            if "session_papers" in st.session_state:
-                for paper_id in st.session_state["session_papers"]:
-                    if f"{session_id} {paper_id}" in st.session_state and st.session_state[f"{session_id} {paper_id}"]:
+            if "group_papers" in st.session_state:
+                for paper_id in st.session_state["group_papers"]:
+                    if f"{group_id} {paper_id}" in st.session_state and st.session_state[f"{group_id} {paper_id}"]:
                         appropriate_papers.append(paper_id)
 
             if len(appropriate_papers) == 0:
-                st.toast("No papers were found in the session")
+                st.toast("No papers were found in the group")
             else:
                 # run recommender
-                recommendation(appropriate_papers, embeddings, embedding_columns, session_id)
+                recommendation(appropriate_papers, embeddings, embedding_columns, group_id)
 
         # search tab
         with tab2:
@@ -293,50 +322,61 @@ def main():
             text_search = st.text_input("Search paper for researching", value="")
 
             if text_search:
-                search(text_search, session_id)
+                search(text_search, group_id)
 
 
-        # session utils
+        # group utils
         col1, col2, col3 = st.sidebar.columns(3)
 
-        add_session_button = col1.button('append session')
-        delete_session_button = col2.button('delete session')
-        save_session_button = col3.button('save and reload')
+        add_group_button = col1.button('Append group')
+        delete_group_button = col2.button('Delete group')
+        save_group_button = col3.button('Save and reload')
 
-        if add_session_button:
-            add_expander = st.sidebar.expander('Add new session')
-            add_form = add_expander.form(key="Add new session")
-            add_form.text_input(label="Session Name", key="session_name")
+        if add_group_button:
+            add_expander = st.sidebar.expander('Add new group')
+            add_form = add_expander.form(key="Add new group")
+            add_form.text_input(label="Group Name", key="group_name")
             add_form.form_submit_button(label="Submit", on_click=submitted_add)
 
         if 'submitted_add' in st.session_state:
             if st.session_state.submitted_add:
-                insert_message = insert_new_session(st.session_state.session_name, user["User ID"], sessions["Name"])
+                group_inserted_data = {
+                    "group_name": st.session_state.group_name,
+                    "user_id": user["User ID"],
+                }
+                insert_message = paper_group_service.create_paper_group(group_inserted_data)
                 st.toast(insert_message)
                 reset_add()
 
-        if delete_session_button:
-            del_expander = st.sidebar.expander('Delete session')
-            del_form = del_expander.form(key="Delete new session")
-            del_form.text_input(label="Session Name", key="delete_session_name")
+        if delete_group_button:
+            del_expander = st.sidebar.expander('Delete group')
+            del_form = del_expander.form(key="Delete new group")
+            del_form.text_input(label="Group Name", key="delete_group_name")
             del_form.form_submit_button(label="Submit", on_click=submitted_del)
 
         if 'submitted_del' in st.session_state:
             if st.session_state.submitted_del:
-                delete_message = delete_session(st.session_state.delete_session_name, user["User ID"])
+                delete_message = paper_group_service.delete_paper_group(
+                    st.session_state.delete_group_name,
+                    user["User ID"]
+                )
                 st.toast(delete_message)
                 reset_del()
 
-        if save_session_button:
+        if save_group_button:
             if current_papers is not None and filtered_df is not None:
                 changes = []
                 for _, (index, row) in enumerate(filtered_df.iterrows()):
                     paper_id = row["Paper ID"]
-                    is_appropriate = st.session_state[f"{session_id} {paper_id}"]
-                    changes.append([session_id, paper_id, int(is_appropriate),
+                    is_appropriate = st.session_state[f"{group_id} {paper_id}"]
+                    changes.append([group_id, paper_id, int(is_appropriate),
                                     datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S")])
 
-                update_message = update_session_item(changes)
+                update_message = paper_group_info_service.update_appropriate(
+                    group_id,
+                    paper_id,
+                    int(is_appropriate),
+                )
                 st.toast(update_message)
 
         authenticator.logout('logout', 'sidebar')
