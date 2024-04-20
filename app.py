@@ -14,6 +14,7 @@ from utils.controller import (get_user_by_username, get_sessions_by_user_id, ins
                               get_papers_by_text, get_paper_by_paper_id_polar, update_session_item_v2)
 from utils.controller import config_file, embedding_columns
 from utils.models import recommend_by_similarity, recommend_by_similarity_v2
+from utils.update_configs import update_configs
 from google.cloud import firestore
 import polars as pl
 
@@ -60,6 +61,10 @@ def recommendation(appropriate_papers):
         st.session_state["run_recommender"] = False
 
     if st.session_state["run_recommender"]:
+        if len(appropriate_papers) == 0:
+            st.write("You have to add papers to the group first to make recommendations")
+            return
+
         recommended_paper_ids, recommended_paper_similarities = recommend_by_similarity_v2(appropriate_papers,
                                                                                            embedding_columns, 30)
         recommended_papers = get_papers_by_list_paper_ids_polar(recommended_paper_ids)
@@ -68,6 +73,9 @@ def recommendation(appropriate_papers):
 
         st.session_state['recommended_papers'] = recommended_papers
     else:
+        if len(appropriate_papers) == 0:
+            st.write("You have to add papers to the group first to make recommendations")
+            return
         if "recommended_papers" in st.session_state:
             recommended_papers = st.session_state['recommended_papers']
         else:
@@ -80,14 +88,6 @@ def recommendation(appropriate_papers):
         if "current_papers" in st.session_state:
             if paper_id in available_papers:
                 continue
-        # if "session_papers" in st.session_state:
-        #     if paper_id in st.session_state["session_papers"]:
-        #         continue
-
-        # if "rec_session_papers" not in st.session_state:
-        #     st.session_state["rec_session_papers"] = []
-        # else:
-        #     st.session_state["rec_session_papers"].append(paper_id)
 
         link = "https://paperswithcode.com/paper/" + paper_id
 
@@ -101,13 +101,13 @@ def recommendation(appropriate_papers):
             st.write(row["Abstract"])
 
         with col2:
-            st.button("Add to session", key=f"rec {st.session_state['session_id']} {paper_id}", on_click=click_add_button,
+            st.button("Add to group", key=f"rec {st.session_state['session_id']} {paper_id}", on_click=click_add_button,
                       args=(st.session_state['session_id'], paper_id, 0))
         st.divider()
 
 
 def search(text_search):
-    searched_papers = get_papers_by_text(text_search).iloc[:50]
+    searched_papers = get_papers_by_text(text_search).sort_values(by=["Year", "Name"], ascending=False).iloc[:50]
 
     # show results
     available_papers = st.session_state["current_papers"]["Paper ID"].tolist()
@@ -209,9 +209,18 @@ def change_session():
     st.session_state["run_recommender"] = False
 
 
-def submitted_add():
-    st.session_state.submitted_add = True
+def submitted_add(user, sessions):
+    current_session_name = st.session_state["session_option"] if "session_option" in st.session_state else None
+
     st.session_state["run_recommender"] = False
+
+    insert_message = insert_new_session(st.session_state.session_name.lower().strip(), user["User ID"],
+                                        sessions["Name"])
+    st.toast(insert_message)
+    st.session_state["sessions"] = get_sessions_by_user_id(user["User ID"])
+
+    if current_session_name is not None:
+        st.session_state["session_option"] = current_session_name
 
 
 def reset_add():
@@ -219,13 +228,14 @@ def reset_add():
     st.session_state["run_recommender"] = False
 
 
-def submitted_del():
-    st.session_state.submitted_del = True
+def submitted_del(user):
     st.session_state["run_recommender"] = False
 
+    delete_message = delete_session(st.session_state.delete_session_name.lower().strip(), user["User ID"])
+    st.toast(delete_message)
+    st.session_state["sessions"] = get_sessions_by_user_id(user["User ID"])
 
 def reset_del():
-    st.session_state.submitted_del = False
     st.session_state["run_recommender"] = False
 
 
@@ -276,6 +286,7 @@ def main():
         page_title="Hello",
         page_icon="👋",
     )
+    update_configs(login_config_path)
     with open(login_config_path) as fl:
         config = yaml.load(fl, Loader=SafeLoader)
 
@@ -286,6 +297,7 @@ def main():
         config['cookie']['expiry_days'],
         config['preauthorized']
     )
+
     name, authentication_status, username = authenticator.login()
     if authentication_status:
 
@@ -295,16 +307,20 @@ def main():
         st.write(f"If you have any feedback, please contact me at 102200251@sv.dut.udn.vn")
 
         user = get_user_by_username(username)
-        sessions = get_sessions_by_user_id(user["User ID"])
-        # print(sessions["Name"])
-        # embeddings = load_database()
+        if "sessions" in st.session_state and st.session_state["sessions"] is not None:
+            sessions = st.session_state["sessions"]
+        else:
+            sessions = get_sessions_by_user_id(user["User ID"])
+            st.session_state["sessions"] = sessions
+
+
 
         # Paper list
         option = st.sidebar.selectbox(
             'Choose the group of papers',
             sessions["Name"],
             on_change=change_session,
-            # value=sessions.loc[sessions["Session ID"] == st.session_state["session_id"]]["Name"],
+            key="session_option"
         )
 
         # show list paper
@@ -394,11 +410,7 @@ def main():
             #         if f"{session_id} {paper_id}" in st.session_state and st.session_state[f"{session_id} {paper_id}"]:
             #             appropriate_papers.append(paper_id)
 
-            if len(appropriate_papers) == 0:
-                st.toast("No appropriate papers were found in the group")
-            else:
-                # run recommender
-                recommendation(appropriate_papers)
+            recommendation(appropriate_papers)
 
         # search tab
         with tab2:
@@ -414,31 +426,21 @@ def main():
 
         add_session_button = col1.button('Create Group')
         delete_session_button = col2.button('Delete Group')
-        save_session_button = col3.button('Save & Recommend', on_click=save_button_click)
+
+        col3.button('Save & Recommend', on_click=save_button_click)
 
         if add_session_button:
             add_expander = st.sidebar.expander('Add new group')
             add_form = add_expander.form(key="Add new session")
             add_form.text_input(label="Session Name", key="session_name")
-            add_form.form_submit_button(label="Submit", on_click=submitted_add)
+            add_form.form_submit_button(label="Submit", on_click=submitted_add, args=(user, sessions))
 
-        if 'submitted_add' in st.session_state:
-            if st.session_state.submitted_add:
-                insert_message = insert_new_session(st.session_state.session_name.lower().strip(), user["User ID"], sessions["Name"])
-                st.toast(insert_message)
-                reset_add()
 
         if delete_session_button:
             del_expander = st.sidebar.expander('Delete group')
             del_form = del_expander.form(key="Delete group")
             del_form.text_input(label="Session Name", key="delete_session_name")
-            del_form.form_submit_button(label="Submit", on_click=submitted_del)
-
-        if 'submitted_del' in st.session_state:
-            if st.session_state.submitted_del:
-                delete_message = delete_session(st.session_state.delete_session_name.lower().strip(), user["User ID"])
-                st.toast(delete_message)
-                reset_del()
+            del_form.form_submit_button(label="Submit", on_click=submitted_del, args=(user, ))
 
         authenticator.logout('Logout', 'sidebar')
 

@@ -4,7 +4,7 @@ import yaml
 from yaml.loader import SafeLoader
 
 # TODO: path is changed between develop and deploy with docker
-config_file = "configs/configs_docker.yaml"
+config_file = "configs/configs_v2.yaml"
 
 with open(config_file) as file:
     configs = yaml.load(file, Loader=SafeLoader)
